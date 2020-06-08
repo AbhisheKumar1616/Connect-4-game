@@ -1,0 +1,237 @@
+package com.starting.javafxapp;
+
+import javafx.animation.TranslateTransition;
+import javafx.application.Platform;
+import javafx.fxml.FXML;
+import javafx.fxml.Initializable;
+import javafx.geometry.Point2D;
+import javafx.scene.control.*;
+import javafx.scene.layout.GridPane;
+import javafx.scene.layout.Pane;
+import javafx.scene.paint.Color;
+import javafx.scene.shape.Circle;
+import javafx.scene.shape.Rectangle;
+import javafx.scene.shape.Shape;
+import javafx.util.Duration;
+
+import java.net.URL;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+import java.util.ResourceBundle;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+
+public class Controller implements Initializable {
+	private static final int col=7;
+	private static final int row=6;
+	private static final int dia=80;
+	private static final String color1="#24303E";
+	private static final String color2="#4CAA88";
+	private  boolean isallowed=true;
+
+	private static String player1="Player one";
+	private static String player2="Player two";
+	private boolean player1move=true;
+
+	private Disc[][] insertdiscarray=new Disc[row][col];
+
+
+	@FXML
+	public TextField playerOneTextField,playerTwoTextField;
+
+	@FXML
+	public Button setNamesButton;
+
+	@FXML
+	public Pane inserteddisk;
+
+	@FXML
+	public Label playername;
+
+	@FXML
+	public Label turn;
+
+	@FXML
+	public GridPane rootgridpane;
+
+	public void playground(){
+		Shape shape= gamewithhole();
+		setNamesButton.setOnAction(event -> setnames());
+		rootgridpane.add(shape, 0, 1);
+		List<Rectangle> rectangleList=clickablecol();
+		for (Rectangle rec:rectangleList) {
+			rootgridpane.add(rec, 0, 1);
+
+		}
+
+	}
+
+	private void setnames() {
+		player1=playerOneTextField.getText()+"'s";
+		player2=playerTwoTextField.getText()+"'s";
+	}
+
+	private Shape gamewithhole() {
+		Shape rec = new Rectangle((col + 1) * dia, (1 + row) * dia);
+		for (int i = 0; i < row; i++) {
+			for (int j = 0; j < col; j++) {
+				Circle circle = new Circle();
+				circle.setRadius(dia / 2);
+				circle.setCenterX(dia / 2);
+				circle.setCenterY(dia / 2);
+				circle.setSmooth(true);
+				circle.setTranslateX(j * (5 + dia) + dia / 4);
+				circle.setTranslateY(i * (5 + dia) + dia / 4);
+
+				rec = Shape.subtract(rec, circle);
+				rec.setFill(Color.WHITE);
+
+
+			}
+		}
+		return rec;
+	}
+	private List<Rectangle>  clickablecol(){
+		List<Rectangle> rectangleList=new ArrayList<>();
+
+
+		for (int i = 0; i <col ; i++) {
+			Rectangle rectangle=new Rectangle(dia,(row+1)*dia);
+			rectangle.setFill(Color.TRANSPARENT);
+			rectangle.setTranslateX(i * (5 + dia) + dia / 4);
+			rectangle.setOnMouseEntered(event -> rectangle.setFill(Color.valueOf("#eeeeee26")));
+			rectangle.setOnMouseExited(event -> rectangle.setFill(Color.TRANSPARENT));
+			final int column=i;
+			rectangle.setOnMouseClicked(event -> {
+				insertdisc(new Disc(player1move),column);
+			});
+
+			rectangleList.add(rectangle);
+		}
+		return rectangleList;
+	}
+
+	private void insertdisc(Disc disc,int column){
+		int r=row-1;
+		while (r>=0){
+			if (getrowifpresent(r,column)==null)
+				break;
+			r--;
+		}
+		if (r<0)
+			return;
+
+		insertdiscarray[r][column]=disc;
+		inserteddisk.getChildren().add(disc);
+
+		TranslateTransition translateTransition=new TranslateTransition(Duration.seconds(0.025),disc);
+		translateTransition.setToY(r * (5 + dia) + dia / 4);
+		int currentrow=r;
+		translateTransition.play();
+
+
+		disc.setTranslateX((column * (5 + dia) + dia / 4));
+		if (gamefinished(currentrow,column)) {
+			gameover();
+		}
+
+		
+		translateTransition.setOnFinished(event -> {
+			player1move=!player1move;
+			playername.setText(player1move? player1:player2);
+		});
+	}
+
+	private boolean gamefinished(int row, int column) {
+
+		//vertical
+		List<Point2D> vertical= IntStream.rangeClosed(row-3,row+3).mapToObj(r ->new Point2D(r,column)).collect(Collectors.toList());
+		List<Point2D> horizontal= IntStream.rangeClosed(column-3,column+3).mapToObj(c ->new Point2D(row,c)).collect(Collectors.toList());
+
+		Point2D startpoint1=new Point2D(row -3,column+3);
+		List<Point2D> diagonal1= IntStream.rangeClosed(0,6).mapToObj(i -> startpoint1.add(i,-i)).collect(Collectors.toList());
+		Point2D startpoint2=new Point2D(row -3,column-3);
+		List<Point2D> diagonal2= IntStream.rangeClosed(0,6).mapToObj(i -> startpoint2.add(i,i)).collect(Collectors.toList());
+
+
+		boolean isended= checkCombination(vertical)|| checkCombination(horizontal) || checkCombination(diagonal1) || checkCombination(diagonal2);
+
+		return isended;
+	}
+
+	private boolean checkCombination(List<Point2D> points) {
+		int count=0;
+		for (Point2D point:points) {
+			int rowindex= (int) point.getX();
+			int colindex= (int) point.getY();
+
+			Disc disc=getrowifpresent(rowindex,colindex);
+			if (disc!=null && disc.player1move==player1move ){
+				count++;
+				if (count==4){
+					return true;
+				}
+			}else
+				count=0;
+
+		}
+		return false;
+	}
+	private Disc getrowifpresent(int rows,int columns){
+		if (rows>=row || rows<0  || columns>=col  || columns<0 )
+			return null;
+		else
+			return insertdiscarray[rows][columns];
+	}
+
+	public void gameover(){
+		Alert alert=new Alert(Alert.AlertType.INFORMATION);
+		ButtonType button1=new ButtonType("Continue");
+		ButtonType button2=new ButtonType("Quit");
+		alert.getButtonTypes().setAll(button1,button2);
+		alert.setTitle("WINNER");
+		String name=player1move? player1:player2;
+		alert.setHeaderText( name +" is tha winner");
+		Optional<ButtonType> buttonType=alert.showAndWait();
+		if (buttonType.isPresent() && (buttonType.get() == button1)){
+			resetgame();
+		}
+		else {
+			Platform.exit();
+			System.exit(0);
+		}
+	}
+
+	public void resetgame() {
+		inserteddisk.getChildren().clear();
+		for (int i = 0; i <insertdiscarray.length ; i++) {
+			for (int j = 0; j <insertdiscarray[i].length ; j++) {
+				insertdiscarray[i][j]=null;
+				
+			}
+		}
+		player1move =true;
+		playername.setText(player1);
+
+		playground();
+	}
+
+	private static class Disc extends Circle{
+		private final boolean player1move;
+
+		public Disc(boolean player1move){
+			this.player1move=player1move;
+			setRadius(dia/2);
+			setFill(player1move? Color.valueOf(color1):Color.valueOf(color2));
+			setCenterX(dia/2);
+			setCenterY(dia/2);
+		}
+	}
+
+
+	@Override
+	public void initialize(URL location, ResourceBundle resources) {
+
+	}
+}
